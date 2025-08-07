@@ -1,0 +1,37 @@
+[workspace]
+members = ["crates/*"]
+default-members = ["crates/retex-cli"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+rust-version = "1.88.0"
+authors = ["The ReTex Project Developers"]
+edition = "2024"
+repository = "https://github.com/zonr/retex"
+license = "MIT"
+categories = ["compilers"]
+keywords = ["retex"]
+readme = "README.md"
+
+[workspace.dependencies]
+retex-cli = { path = "crates/retex-frontend", version = "0.1.0" }
+
+[profile.dev.package."*"]
+opt-level = 2
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+
+[profile.release.package."retex-cli"]
+strip = true
+
+[workspace.lints.clippy]
+blocks_in_conditions = "allow"
+comparison_chain = "allow"
+iter_over_hash_type = "warn"
+manual_range_contains = "allow"
+mutable_key_type = "allow"
+uninlined_format_args = "warn"
+wildcard_in_or_patterns = "allow"

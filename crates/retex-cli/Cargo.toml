@@ -1,0 +1,22 @@
+[package]
+name = "retex-cli"
+description = "The command line interface for reTeX."
+version.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+edition.workspace = true
+repository.workspace = true
+license.workspace = true
+categories.workspace = true
+keywords.workspace = true
+readme.workspace = true
+
+[[bin]]
+name = "retex"
+path = "src/main.rs"
+doc = false
+
+[dependencies]
+
+[lints]
+workspace = true
