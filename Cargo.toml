@@ -15,6 +15,8 @@ keywords = ["retex"]
 readme = "README.md"
 
 [workspace.dependencies]
+retex-base = { path = "crates/retex-base", version = "0.1.0" }
+retex-lex = { path = "crates/retex-lex", version = "0.1.0" }
 retex-cli = { path = "crates/retex-frontend", version = "0.1.0" }
 
 [profile.dev.package."*"]

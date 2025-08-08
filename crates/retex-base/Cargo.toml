@@ -1,0 +1,16 @@
+[package]
+name = "retex-base"
+version.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+edition.workspace = true
+repository.workspace = true
+license.workspace = true
+categories.workspace = true
+keywords.workspace = true
+readme.workspace = true
+
+[lib]
+name = "retex_base"
+
+[dependencies]

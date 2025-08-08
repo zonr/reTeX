@@ -3,5 +3,16 @@
 version = 4
 
 [[package]]
+name = "retex-base"
+version = "0.1.0"
+
+[[package]]
 name = "retex-cli"
 version = "0.1.0"
+
+[[package]]
+name = "retex-lex"
+version = "0.1.0"
+dependencies = [
+ "retex-base",
+]
