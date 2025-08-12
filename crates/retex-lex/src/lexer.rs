@@ -284,9 +284,34 @@ impl<'a> Lexer<'a> {
                         unreachable!()
                     },
                     CategoryCode::Space => {
-                        // Produce a space token and skipping all subsequent spaces.
+                        // Skip spaces before EOL or EOF according to TeX rules - only emit a space token if we hit
+                        // bytes other than space, EOL and EOF
+
+                        // Form a token so in the case where we need to emit a space token for this space, the output
+                        // token refers to the first space
                         self.form_token(token, TokenKind::Space, self.consume_char(&mut current_pos));
-                        self.skip_spaces = true;
+
+                        // Skip all subsequent spaces
+                        let mut emit_space_token = false;
+                        while let Some(next_ch) = self.peek_char(current_pos) {
+                            if self.category_code_table.is_space(next_ch) {
+                                self.consume_char(&mut current_pos);
+                                continue;
+                            }
+
+                            // Only emit a space token if encountering a non-EOL bytes
+                            emit_space_token = !self.category_code_table.is_eol(next_ch);
+                            break;
+                        }
+
+                        // Point to the next non-space pos
+                        self.next_token_start_pos = current_pos;
+                        if !emit_space_token {
+                            // Ignore all spaces and restart the loop to get a token based on next byte
+                            continue;
+                        }
+
+                        // Note the token has been formed at the beginning of the case, so just return
                         return;
                     },
                     CategoryCode::Letter => {
@@ -312,8 +337,7 @@ impl<'a> Lexer<'a> {
                 }
             } else {
                 // End of file
-                token.set_kind(TokenKind::Eof);
-                token.set_location(SourceLocation::new(current_pos as u32));
+                self.form_token(token, TokenKind::Eof, current_pos);
                 return;
             }
         }

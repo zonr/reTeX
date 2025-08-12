@@ -108,7 +108,7 @@ fn test_control_word() {
 fn test_control_symbol() {
     assert_tokens_match("\\{  ", &[
         (TokenKind::ControlSymbol, SourceLocation::new(0), 2, START_OF_LINE), // \{
-        (TokenKind::Space, SourceLocation::new(2), 1, NO_FLAGS), // space
+        // Spaces at EOF are skipped - no space token generated
         (TokenKind::Eof, SourceLocation::new(4), 0, NO_FLAGS),
     ]);
 }
@@ -755,6 +755,55 @@ fn test_custom_newline_character() {
         lexer.set_category_code(b'\r', CategoryCode::Other);
         lexer.set_category_code(b'\n', CategoryCode::Other);
     });
+}
+
+#[test]
+fn test_spaces_before_eol_skipped() {
+    // Test that spaces before various EOL characters are completely skipped
+    assert_tokens_match("word   \ntext", &[
+        (TokenKind::Letter, SourceLocation::new(0), 1, START_OF_LINE), // w
+        (TokenKind::Letter, SourceLocation::new(1), 1, NO_FLAGS), // o
+        (TokenKind::Letter, SourceLocation::new(2), 1, NO_FLAGS), // r
+        (TokenKind::Letter, SourceLocation::new(3), 1, NO_FLAGS), // d
+        // 3 spaces before \n are skipped - no space token generated
+        (TokenKind::Space, SourceLocation::new(7), 1, NO_FLAGS), // \n becomes space token
+        (TokenKind::Letter, SourceLocation::new(8), 1, START_OF_LINE), // t
+        (TokenKind::Letter, SourceLocation::new(9), 1, NO_FLAGS), // e
+        (TokenKind::Letter, SourceLocation::new(10), 1, NO_FLAGS), // x
+        (TokenKind::Letter, SourceLocation::new(11), 1, NO_FLAGS), // t
+        (TokenKind::Eof, SourceLocation::new(12), 0, NO_FLAGS),
+    ]);
+}
+
+#[test]
+fn test_spaces_before_eof_skipped() {
+    // Test that spaces at end of file are completely skipped
+    assert_tokens_match("word   ", &[
+        (TokenKind::Letter, SourceLocation::new(0), 1, START_OF_LINE), // w
+        (TokenKind::Letter, SourceLocation::new(1), 1, NO_FLAGS), // o
+        (TokenKind::Letter, SourceLocation::new(2), 1, NO_FLAGS), // r
+        (TokenKind::Letter, SourceLocation::new(3), 1, NO_FLAGS), // d
+        // 3 spaces at EOF are skipped - no space token generated
+        (TokenKind::Eof, SourceLocation::new(7), 0, NO_FLAGS),
+    ]);
+}
+
+#[test]
+fn test_spaces_between_words_preserved() {
+    // Test that spaces between non-EOL characters are preserved as tokens
+    assert_tokens_match("word   text", &[
+        (TokenKind::Letter, SourceLocation::new(0), 1, START_OF_LINE), // w
+        (TokenKind::Letter, SourceLocation::new(1), 1, NO_FLAGS), // o
+        (TokenKind::Letter, SourceLocation::new(2), 1, NO_FLAGS), // r
+        (TokenKind::Letter, SourceLocation::new(3), 1, NO_FLAGS), // d
+        (TokenKind::Space, SourceLocation::new(4), 1, NO_FLAGS), // first space generates token
+        // Additional spaces are skipped by existing logic
+        (TokenKind::Letter, SourceLocation::new(7), 1, NO_FLAGS), // t
+        (TokenKind::Letter, SourceLocation::new(8), 1, NO_FLAGS), // e
+        (TokenKind::Letter, SourceLocation::new(9), 1, NO_FLAGS), // x
+        (TokenKind::Letter, SourceLocation::new(10), 1, NO_FLAGS), // t
+        (TokenKind::Eof, SourceLocation::new(11), 0, NO_FLAGS),
+    ]);
 }
 
 #[test]

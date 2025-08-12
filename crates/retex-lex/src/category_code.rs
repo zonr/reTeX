@@ -85,9 +85,12 @@ impl CategoryCodeTable {
     pub fn is_space_or_ignored(&self, byte: u8) -> bool {
         matches!(self.get(byte), CategoryCode::Space | CategoryCode::Ignored)
     }
-
     pub fn is_escape(&self, byte: u8) -> bool {
         self.get(byte) == CategoryCode::Escape
+    }
+
+    pub fn is_eol(&self, byte: u8) -> bool {
+        self.get(byte) == CategoryCode::EndOfLine
     }
 }
 
