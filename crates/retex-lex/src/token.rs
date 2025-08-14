@@ -1,4 +1,5 @@
 use retex_base::{SourceLocation, SourceRange};
+use crate::command_identifier::CommandIdentifier;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TokenKind {
@@ -56,12 +57,21 @@ impl Default for TokenFlags {
 
 
 #[derive(Debug, Clone)]
+pub enum TokenData<'a> {
+    /// Raw bytes from the input (used for most token types)
+    RawBytes(Option<&'a [u8]>),
+    /// Command identifier (used for ControlWord tokens after processing caret notation)
+    CommandIdentifier(&'a CommandIdentifier<'a>),
+}
+
+#[derive(Debug, Clone)]
 pub struct Token<'a> {
     kind: TokenKind,
     flags: TokenFlags,
     location: SourceLocation,
+    /// Number of bytes in the input that produces this token
     length: u32,
-    text: Option<&'a [u8]>,
+    data: TokenData<'a>,
 }
 
 impl<'a> Token<'a> {
@@ -71,27 +81,17 @@ impl<'a> Token<'a> {
             flags: TokenFlags::new(),
             location,
             length,
-            text: None,
+            data: TokenData::RawBytes(None),
         }
     }
 
-    pub fn with_text(kind: TokenKind, location: SourceLocation, text: &'a [u8]) -> Self {
-        let length = text.len() as u32;
-        Self {
-            kind,
-            flags: TokenFlags::new(),
-            location,
-            length,
-            text: Some(text),
-        }
-    }
 
     pub fn start_token(&mut self) {
         self.kind = TokenKind::Unknown;
         self.flags = TokenFlags::new();
         self.location = SourceLocation::invalid();
         self.length = 0;
-        self.text = None;
+        self.data = TokenData::RawBytes(None);
     }
 
     pub fn kind(&self) -> TokenKind {
@@ -158,17 +158,30 @@ impl<'a> Token<'a> {
         self.flags.has(flag)
     }
 
-    pub fn text(&self) -> Option<&[u8]> {
-        self.text
+    pub fn raw_bytes(&self) -> Option<&'a [u8]> {
+        assert_ne!(self.kind, TokenKind::ControlWord);
+        match &self.data {
+            TokenData::RawBytes(bytes) => *bytes,
+            TokenData::CommandIdentifier(_) => unreachable!(),
+        }
     }
 
-    pub fn text_as_str(&self) -> Option<&str> {
-        self.text.and_then(|bytes| std::str::from_utf8(bytes).ok())
+    pub fn command_identifier(&self) -> &CommandIdentifier<'a> {
+        assert_eq!(self.kind, TokenKind::ControlWord);
+        match &self.data {
+            TokenData::CommandIdentifier(id) => id,
+            TokenData::RawBytes(_) => unreachable!(),
+        }
     }
 
-    pub fn set_text(&mut self, text: &'a [u8]) {
-        self.length = text.len() as u32;
-        self.text = Some(text);
+    pub fn set_raw_bytes(&mut self, bytes: &'a [u8]) {
+        assert_ne!(self.kind, TokenKind::ControlWord);
+        self.data = TokenData::RawBytes(Some(bytes));
+    }
+
+    pub fn set_command_identifier(&mut self, identifier: &'a CommandIdentifier<'a>) {
+        assert_eq!(self.kind, TokenKind::ControlWord);
+        self.data = TokenData::CommandIdentifier(identifier);
     }
 
     pub fn at_start_of_line(&self) -> bool {
@@ -187,7 +200,7 @@ impl<'a> Default for Token<'a> {
             flags: TokenFlags::new(),
             location: SourceLocation::invalid(),
             length: 0,
-            text: None,
+            data: TokenData::RawBytes(None),
         }
     }
 }
@@ -220,45 +233,45 @@ mod tests {
     fn test_token_new() {
         let location = SourceLocation::new(10);
         let token = Token::new(TokenKind::Letter, location, 5);
-        
+
         assert_eq!(token.kind(), TokenKind::Letter);
         assert_eq!(token.location(), location);
         assert_eq!(token.length(), 5);
         assert_eq!(token.flags(), TokenFlags::NONE);
-        assert!(token.text().is_none());
+        assert!(token.raw_bytes().is_none());
     }
 
     #[test]
     fn test_token_with_text() {
         let location = SourceLocation::new(0);
         let text = b"hello";
-        let token = Token::with_text(TokenKind::ControlWord, location, text);
-        
-        assert_eq!(token.kind(), TokenKind::ControlWord);
+        let mut token = Token::new(TokenKind::Letter, location, 5);
+        token.set_raw_bytes(text);
+
+        assert_eq!(token.kind(), TokenKind::Letter);
         assert_eq!(token.location(), location);
         assert_eq!(token.length(), 5);
-        assert_eq!(token.text(), Some(text.as_slice()));
-        assert_eq!(token.text_as_str(), Some("hello"));
+        assert_eq!(token.raw_bytes(), Some(text.as_slice()));
     }
 
     #[test]
     fn test_token_start_token() {
         let mut token = Token::new(TokenKind::Letter, SourceLocation::new(10), 5);
         token.set_flag(TokenFlags::START_OF_LINE);
-        
+
         token.start_token();
-        
+
         assert_eq!(token.kind(), TokenKind::Unknown);
         assert_eq!(token.flags(), TokenFlags::NONE);
         assert!(!token.location().is_valid());
         assert_eq!(token.length(), 0);
-        assert!(token.text().is_none());
+        assert!(token.raw_bytes().is_none());
     }
 
     #[test]
     fn test_token_is_methods() {
         let token = Token::new(TokenKind::Letter, SourceLocation::new(0), 1);
-        
+
         assert!(token.is(TokenKind::Letter));
         assert!(!token.is(TokenKind::Other));
         assert!(token.is_not(TokenKind::Other));
@@ -271,7 +284,7 @@ mod tests {
     fn test_token_set_kind() {
         let mut token = Token::new(TokenKind::Letter, SourceLocation::new(0), 1);
         assert_eq!(token.kind(), TokenKind::Letter);
-        
+
         token.set_kind(TokenKind::Other);
         assert_eq!(token.kind(), TokenKind::Other);
     }
@@ -281,11 +294,11 @@ mod tests {
         let mut token = Token::new(TokenKind::Letter, SourceLocation::new(10), 5);
         assert_eq!(token.location(), SourceLocation::new(10));
         assert_eq!(token.end_location(), SourceLocation::new(15));
-        
+
         let range = token.range();
         assert_eq!(range.start, SourceLocation::new(10));
         assert_eq!(range.end, SourceLocation::new(15));
-        
+
         token.set_location(SourceLocation::new(20));
         assert_eq!(token.location(), SourceLocation::new(20));
     }
@@ -294,7 +307,7 @@ mod tests {
     fn test_token_length_methods() {
         let mut token = Token::new(TokenKind::Letter, SourceLocation::new(0), 5);
         assert_eq!(token.length(), 5);
-        
+
         token.set_length(10);
         assert_eq!(token.length(), 10);
     }
@@ -303,11 +316,11 @@ mod tests {
     fn test_token_flag_methods() {
         let mut token = Token::new(TokenKind::Letter, SourceLocation::new(0), 1);
         assert!(!token.has_flag(TokenFlags::START_OF_LINE));
-        
+
         token.set_flag(TokenFlags::START_OF_LINE);
         assert!(token.has_flag(TokenFlags::START_OF_LINE));
         assert_eq!(token.flags(), TokenFlags::START_OF_LINE);
-        
+
         token.clear_flag(TokenFlags::START_OF_LINE);
         assert!(!token.has_flag(TokenFlags::START_OF_LINE));
     }
@@ -315,31 +328,27 @@ mod tests {
     #[test]
     fn test_token_text_methods() {
         let mut token = Token::new(TokenKind::Letter, SourceLocation::new(0), 0);
-        assert!(token.text().is_none());
-        assert!(token.text_as_str().is_none());
-        
+        assert!(token.raw_bytes().is_none());
+
         let text = b"test";
-        token.set_text(text);
-        assert_eq!(token.text(), Some(text.as_slice()));
-        assert_eq!(token.text_as_str(), Some("test"));
-        assert_eq!(token.length(), 4);
+        token.set_raw_bytes(text);
+        assert_eq!(token.raw_bytes(), Some(text.as_slice()));
     }
 
     #[test]
     fn test_token_text_as_str_invalid_utf8() {
         let mut token = Token::new(TokenKind::Letter, SourceLocation::new(0), 0);
         let invalid_utf8 = &[0xFF, 0xFE];
-        token.set_text(invalid_utf8);
-        
-        assert_eq!(token.text(), Some(invalid_utf8.as_slice()));
-        assert!(token.text_as_str().is_none());
+        token.set_raw_bytes(invalid_utf8);
+
+        assert_eq!(token.raw_bytes(), Some(invalid_utf8.as_slice()));
     }
 
     #[test]
     fn test_token_at_start_of_line() {
         let mut token = Token::new(TokenKind::Letter, SourceLocation::new(0), 1);
         assert!(!token.at_start_of_line());
-        
+
         token.set_flag(TokenFlags::START_OF_LINE);
         assert!(token.at_start_of_line());
     }
@@ -349,13 +358,13 @@ mod tests {
     fn test_token_is_identifier() {
         let letter_token = Token::new(TokenKind::Letter, SourceLocation::new(0), 1);
         assert!(letter_token.is_identifier());
-        
+
         let control_word_token = Token::new(TokenKind::ControlWord, SourceLocation::new(0), 1);
         assert!(control_word_token.is_identifier());
-        
+
         let control_symbol_token = Token::new(TokenKind::ControlSymbol, SourceLocation::new(0), 1);
         assert!(control_symbol_token.is_identifier());
-        
+
         let other_token = Token::new(TokenKind::Other, SourceLocation::new(0), 1);
         assert!(!other_token.is_identifier());
     }
@@ -371,7 +380,7 @@ mod tests {
         assert_eq!(token.flags(), TokenFlags::NONE);
         assert!(!token.location().is_valid());
         assert_eq!(token.length(), 0);
-        assert!(token.text().is_none());
+        assert!(token.raw_bytes().is_none());
     }
 
     #[test]

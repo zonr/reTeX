@@ -12,6 +12,7 @@ readme.workspace = true
 
 [dependencies]
 retex-base.workspace = true
+bumpalo = { version = "3.14", features = ["collections"] }
 
 [lints]
 workspace = true
