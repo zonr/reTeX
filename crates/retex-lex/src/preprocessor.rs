@@ -7,7 +7,7 @@ use crate::command_identifier::{CommandIdentifier, CommandIdentifierTable};
 ///
 ///
 pub struct Preprocessor<'pp> {
-    lexer: Option<Box<Lexer<'pp>>>,
+    lexer: Option<Box<Lexer<'pp, 'pp>>>,
     command_identifier_table: CommandIdentifierTable<'pp>,
 }
 
@@ -19,10 +19,11 @@ impl<'pp> Preprocessor<'pp> {
         }
     }
 
-
     /// Main interface that shares the same prototype as Lexer's lex method.
     /// Calls into Lexer to get stream of tokens and produces tokens that cannot be expanded further.
-    pub fn lex(&mut self, token: &mut Token<'pp>) {
+    pub fn lex<'token>(&mut self, token: &'token mut Token<'token>)
+    where
+        'pp: 'token {
         // For now, just delegate to the lexer
         // TODO: Add expansion logic here
         if let Some(ref mut lexer) = self.lexer {

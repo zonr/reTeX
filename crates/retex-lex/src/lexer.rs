@@ -1,4 +1,4 @@
-use retex_base::{MemoryBuffer, SourceLocation};
+use retex_base::SourceLocation;
 use crate::token::{Token, TokenKind, TokenFlags};
 use crate::category_code::{CategoryCode, CategoryCodeTable};
 use crate::preprocessor::Preprocessor;
@@ -14,9 +14,9 @@ fn hex_char_to_value(ch: u8) -> u8 {
 }
 
 /// Turns a text buffer into a stream of tokens.
-pub struct Lexer<'a> {
+pub struct Lexer<'source, 'pp> {
     /// The input bytes being lexed
-    input: &'a [u8],
+    input: &'source [u8],
     /// Category code table for determining character types
     category_code_table: CategoryCodeTable,
     /// Start position of the next token to be lexed
@@ -26,7 +26,7 @@ pub struct Lexer<'a> {
     /// Discard all space tokens
     skip_spaces: bool,
     /// Reference to preprocessor for command identifier management
-    preprocessor: &'a Preprocessor<'a>,
+    preprocessor: &'pp Preprocessor<'pp>,
 }
 
 /// [Token]s with single byte char point their token data into the corresponding byte in the following statically
@@ -51,8 +51,8 @@ static CHAR_TOKEN_DATA: [u8; 256] = [
     240, 241, 242, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255,
 ];
 
-impl<'a> Lexer<'a> {
-    pub fn from_bytes(input: &'a [u8], preprocessor: &'a Preprocessor<'a>) -> Self {
+impl<'source, 'pp> Lexer<'source, 'pp> {
+    pub fn from_bytes(input: &'source [u8], preprocessor: &'pp Preprocessor<'pp>) -> Self {
         Self {
             input,
             category_code_table: CategoryCodeTable::new(),
@@ -139,7 +139,9 @@ impl<'a> Lexer<'a> {
         self.next_token_start_pos = cur_token_end_pos;
     }
 
-    fn form_token_from_input(&mut self, token: &mut Token<'a>, kind: TokenKind, cur_token_end_pos: usize) {
+    fn form_token_from_input<'token>(&mut self, token: &mut Token<'token>, kind: TokenKind, cur_token_end_pos: usize)
+    where
+        'source: 'token {
         let input_bytes = &self.input[self.next_token_start_pos..cur_token_end_pos];
         self.form_token(token, kind, cur_token_end_pos);
         token.set_raw_bytes(input_bytes);
@@ -177,7 +179,10 @@ impl<'a> Lexer<'a> {
 
     /// We just read an escape character (\) that started a control sequence.
     /// Read the control word (letters) or control symbol (single character) that follows.
-    fn lex_control_sequence(&mut self, token: &mut Token<'a>, current_pos: &mut usize) {
+    fn lex_control_sequence<'token>(&mut self, token: &mut Token<'token>, current_pos: &mut usize)
+    where
+        'pp: 'token,
+        'source: 'token {
         // Skip the escape character
         self.consume_char(current_pos);
 
@@ -201,13 +206,15 @@ impl<'a> Lexer<'a> {
 
     /// We just read and consumed the first letter of a control word after the escape character.
     /// Read all remaining letters to form the complete control word token.
-    fn lex_control_word_continue(
+    fn lex_control_word_continue<'token>(
         &mut self,
-        token: &mut Token<'a>,
+        token: &mut Token<'token>,
         current_pos: &mut usize,
         first_ch: u8,
         first_ch_size: usize,
-        is_first_ch_transformed: bool) {
+        is_first_ch_transformed: bool)
+    where
+        'pp: 'token {
 
         let control_word_start = *current_pos - first_ch_size;
 
@@ -264,7 +271,8 @@ impl<'a> Lexer<'a> {
 
     /// We just read a parameter character (#) that may start a parameter token.
     /// Read the digit that follows (if any) to form a parameter reference like #1, #2, etc.
-    fn lex_parameter_token(&mut self, token: &mut Token<'a>, current_pos: &mut usize) {
+    fn lex_parameter_token<'token>(&mut self, token: &mut Token<'token>, current_pos: &mut usize)
+    where 'source: 'token {
         // Skip the # character
         self.consume_char(current_pos);
 
@@ -278,7 +286,10 @@ impl<'a> Lexer<'a> {
         self.form_token_from_input(token, TokenKind::Parameter, *current_pos);
     }
 
-    pub fn lex(&mut self, token: &mut Token<'a>) {
+    pub fn lex<'token>(&mut self, token: &mut Token<'token>)
+    where
+        'pp: 'token,
+        'source: 'token {
         token.start_token();
 
         loop {

@@ -57,24 +57,24 @@ impl Default for TokenFlags {
 
 
 #[derive(Debug, Clone)]
-pub enum TokenData<'a> {
+pub enum TokenData<'token> {
     /// Raw bytes from the input (used for most token types)
-    RawBytes(Option<&'a [u8]>),
+    RawBytes(Option<&'token [u8]>),
     /// Command identifier (used for ControlWord tokens after processing caret notation)
-    CommandIdentifier(&'a CommandIdentifier<'a>),
+    CommandIdentifier(&'token CommandIdentifier<'token>),
 }
 
 #[derive(Debug, Clone)]
-pub struct Token<'a> {
+pub struct Token<'token> {
     kind: TokenKind,
     flags: TokenFlags,
     location: SourceLocation,
     /// Number of bytes in the input that produces this token
     length: u32,
-    data: TokenData<'a>,
+    data: TokenData<'token>,
 }
 
-impl<'a> Token<'a> {
+impl<'token> Token<'token> {
     pub fn new(kind: TokenKind, location: SourceLocation, length: u32) -> Self {
         Self {
             kind,
@@ -158,7 +158,7 @@ impl<'a> Token<'a> {
         self.flags.has(flag)
     }
 
-    pub fn raw_bytes(&self) -> Option<&'a [u8]> {
+    pub fn raw_bytes(&self) -> Option<&'token [u8]> {
         assert_ne!(self.kind, TokenKind::ControlWord);
         match &self.data {
             TokenData::RawBytes(bytes) => *bytes,
@@ -166,7 +166,7 @@ impl<'a> Token<'a> {
         }
     }
 
-    pub fn command_identifier(&self) -> &CommandIdentifier<'a> {
+    pub fn command_identifier(&self) -> &CommandIdentifier<'token> {
         assert_eq!(self.kind, TokenKind::ControlWord);
         match &self.data {
             TokenData::CommandIdentifier(id) => id,
@@ -174,12 +174,12 @@ impl<'a> Token<'a> {
         }
     }
 
-    pub fn set_raw_bytes(&mut self, bytes: &'a [u8]) {
+    pub fn set_raw_bytes(&mut self, bytes: &'token [u8]) {
         assert_ne!(self.kind, TokenKind::ControlWord);
         self.data = TokenData::RawBytes(Some(bytes));
     }
 
-    pub fn set_command_identifier(&mut self, identifier: &'a CommandIdentifier<'a>) {
+    pub fn set_command_identifier(&mut self, identifier: &'token CommandIdentifier<'token>) {
         assert_eq!(self.kind, TokenKind::ControlWord);
         self.data = TokenData::CommandIdentifier(identifier);
     }
@@ -193,7 +193,7 @@ impl<'a> Token<'a> {
     }
 }
 
-impl<'a> Default for Token<'a> {
+impl<'token> Default for Token<'token> {
     fn default() -> Self {
         Self {
             kind: TokenKind::Unknown,
