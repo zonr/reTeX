@@ -1,3 +1,6 @@
+use std::collections::HashMap;
+use retex_base::MaybeChar;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum CategoryCode {
@@ -26,71 +29,72 @@ impl CategoryCode {
 }
 
 pub struct CategoryCodeTable {
-    table: [CategoryCode; 256],
+    table: HashMap<MaybeChar, CategoryCode>,
 }
 
 impl CategoryCodeTable {
     pub fn new() -> Self {
-        let mut table = [CategoryCode::Other; 256];
+        let mut table = HashMap::new();
 
         // Set default category codes
-        table[b'\\' as usize] = CategoryCode::Escape;
-        table[b'{' as usize] = CategoryCode::BeginGroup;
-        table[b'}' as usize] = CategoryCode::EndGroup;
-        table[b'$' as usize] = CategoryCode::MathShift;
-        table[b'&' as usize] = CategoryCode::AlignmentTab;
-        table[b'\r' as usize] = CategoryCode::EndOfLine;
-        table[b'\n' as usize] = CategoryCode::EndOfLine;
-        table[b'#' as usize] = CategoryCode::Parameter;
-        table[b'^' as usize] = CategoryCode::Superscript;
-        table[b'_' as usize] = CategoryCode::Subscript;
-        table[b'\0' as usize] = CategoryCode::Ignored;
-        table[127] = CategoryCode::Ignored; // DEL
-        table[b' ' as usize] = CategoryCode::Space;
-        table[b'\t' as usize] = CategoryCode::Space;
-        table[b'~' as usize] = CategoryCode::Active;
-        table[b'%' as usize] = CategoryCode::Comment;
+        table.insert(MaybeChar::from_char('\\'), CategoryCode::Escape);
+        table.insert(MaybeChar::from_char('{'), CategoryCode::BeginGroup);
+        table.insert(MaybeChar::from_char('}'), CategoryCode::EndGroup);
+        table.insert(MaybeChar::from_char('$'), CategoryCode::MathShift);
+        table.insert(MaybeChar::from_char('&'), CategoryCode::AlignmentTab);
+        table.insert(MaybeChar::from_char('\r'), CategoryCode::EndOfLine);
+        table.insert(MaybeChar::from_char('\n'), CategoryCode::EndOfLine);
+        table.insert(MaybeChar::from_char('#'), CategoryCode::Parameter);
+        table.insert(MaybeChar::from_char('^'), CategoryCode::Superscript);
+        table.insert(MaybeChar::from_char('_'), CategoryCode::Subscript);
+        table.insert(MaybeChar::from_char('\0'), CategoryCode::Ignored);
+        table.insert(MaybeChar::from_char('\u{7f}'), CategoryCode::Ignored); // DEL
+        table.insert(MaybeChar::from_char(' '), CategoryCode::Space);
+        table.insert(MaybeChar::from_char('\t'), CategoryCode::Space);
+        table.insert(MaybeChar::from_char('~'), CategoryCode::Active);
+        table.insert(MaybeChar::from_char('%'), CategoryCode::Comment);
 
         // Set letters
-        for c in b'a'..=b'z' {
-            table[c as usize] = CategoryCode::Letter;
+        for c in 'a'..='z' {
+            table.insert(MaybeChar::from_char(c), CategoryCode::Letter);
         }
-        for c in b'A'..=b'Z' {
-            table[c as usize] = CategoryCode::Letter;
+        for c in 'A'..='Z' {
+            table.insert(MaybeChar::from_char(c), CategoryCode::Letter);
         }
 
         Self { table }
     }
 
-    pub fn get(&self, byte: u8) -> CategoryCode {
-        self.table[byte as usize]
+    pub fn get(&self, maybe_char: MaybeChar) -> CategoryCode {
+        self.table.get(&maybe_char).copied().unwrap_or(CategoryCode::Other)
     }
 
-    pub fn set(&mut self, byte: u8, category_code: CategoryCode) {
-        self.table[byte as usize] = category_code;
+    pub fn set(&mut self, maybe_char: MaybeChar, category_code: CategoryCode) {
+        self.table.insert(maybe_char, category_code);
     }
 
-    pub fn is_letter(&self, byte: u8) -> bool {
-        self.get(byte) == CategoryCode::Letter
+    pub fn is_letter(&self, maybe_char: MaybeChar) -> bool {
+        self.get(maybe_char) == CategoryCode::Letter
     }
 
-    pub fn is_space(&self, byte: u8) -> bool {
-        self.get(byte) == CategoryCode::Space
+    pub fn is_space(&self, maybe_char: MaybeChar) -> bool {
+        self.get(maybe_char) == CategoryCode::Space
     }
 
-    pub fn is_ignored(&self, byte: u8) -> bool {
-        self.get(byte) == CategoryCode::Ignored
+    pub fn is_ignored(&self, maybe_char: MaybeChar) -> bool {
+        self.get(maybe_char) == CategoryCode::Ignored
     }
 
-    pub fn is_space_or_ignored(&self, byte: u8) -> bool {
-        matches!(self.get(byte), CategoryCode::Space | CategoryCode::Ignored)
-    }
-    pub fn is_escape(&self, byte: u8) -> bool {
-        self.get(byte) == CategoryCode::Escape
+    pub fn is_space_or_ignored(&self, maybe_char: MaybeChar) -> bool {
+        matches!(self.get(maybe_char), CategoryCode::Space | CategoryCode::Ignored)
     }
 
-    pub fn is_eol(&self, byte: u8) -> bool {
-        self.get(byte) == CategoryCode::EndOfLine
+    pub fn is_escape(&self, maybe_char: MaybeChar) -> bool {
+        self.get(maybe_char) == CategoryCode::Escape
+    }
+
+    pub fn is_eol(&self, maybe_char: MaybeChar) -> bool {
+        self.get(maybe_char) == CategoryCode::EndOfLine
     }
 }
 
@@ -117,34 +121,34 @@ mod tests {
         let table = CategoryCodeTable::new();
 
         // Test special characters
-        assert_eq!(table.get(b'\\'), CategoryCode::Escape);
-        assert_eq!(table.get(b'{'), CategoryCode::BeginGroup);
-        assert_eq!(table.get(b'}'), CategoryCode::EndGroup);
-        assert_eq!(table.get(b'$'), CategoryCode::MathShift);
-        assert_eq!(table.get(b'&'), CategoryCode::AlignmentTab);
-        assert_eq!(table.get(b'\r'), CategoryCode::EndOfLine);
-        assert_eq!(table.get(b'\n'), CategoryCode::EndOfLine);
-        assert_eq!(table.get(b'#'), CategoryCode::Parameter);
-        assert_eq!(table.get(b'^'), CategoryCode::Superscript);
-        assert_eq!(table.get(b'_'), CategoryCode::Subscript);
-        assert_eq!(table.get(b'\0'), CategoryCode::Ignored);
-        assert_eq!(table.get(127), CategoryCode::Ignored); // DEL
-        assert_eq!(table.get(b' '), CategoryCode::Space);
-        assert_eq!(table.get(b'\t'), CategoryCode::Space);
-        assert_eq!(table.get(b'~'), CategoryCode::Active);
-        assert_eq!(table.get(b'%'), CategoryCode::Comment);
+        assert_eq!(table.get(MaybeChar::from_char('\\')), CategoryCode::Escape);
+        assert_eq!(table.get(MaybeChar::from_char('{')), CategoryCode::BeginGroup);
+        assert_eq!(table.get(MaybeChar::from_char('}')), CategoryCode::EndGroup);
+        assert_eq!(table.get(MaybeChar::from_char('$')), CategoryCode::MathShift);
+        assert_eq!(table.get(MaybeChar::from_char('&')), CategoryCode::AlignmentTab);
+        assert_eq!(table.get(MaybeChar::from_char('\r')), CategoryCode::EndOfLine);
+        assert_eq!(table.get(MaybeChar::from_char('\n')), CategoryCode::EndOfLine);
+        assert_eq!(table.get(MaybeChar::from_char('#')), CategoryCode::Parameter);
+        assert_eq!(table.get(MaybeChar::from_char('^')), CategoryCode::Superscript);
+        assert_eq!(table.get(MaybeChar::from_char('_')), CategoryCode::Subscript);
+        assert_eq!(table.get(MaybeChar::from_char('\0')), CategoryCode::Ignored);
+        assert_eq!(table.get(MaybeChar::from_char('\u{7f}')), CategoryCode::Ignored); // DEL
+        assert_eq!(table.get(MaybeChar::from_char(' ')), CategoryCode::Space);
+        assert_eq!(table.get(MaybeChar::from_char('\t')), CategoryCode::Space);
+        assert_eq!(table.get(MaybeChar::from_char('~')), CategoryCode::Active);
+        assert_eq!(table.get(MaybeChar::from_char('%')), CategoryCode::Comment);
 
         // Test letters
-        assert_eq!(table.get(b'a'), CategoryCode::Letter);
-        assert_eq!(table.get(b'z'), CategoryCode::Letter);
-        assert_eq!(table.get(b'A'), CategoryCode::Letter);
-        assert_eq!(table.get(b'Z'), CategoryCode::Letter);
+        assert_eq!(table.get(MaybeChar::from_char('a')), CategoryCode::Letter);
+        assert_eq!(table.get(MaybeChar::from_char('z')), CategoryCode::Letter);
+        assert_eq!(table.get(MaybeChar::from_char('A')), CategoryCode::Letter);
+        assert_eq!(table.get(MaybeChar::from_char('Z')), CategoryCode::Letter);
 
         // Test other characters default to Other
-        assert_eq!(table.get(b'0'), CategoryCode::Other);
-        assert_eq!(table.get(b'9'), CategoryCode::Other);
-        assert_eq!(table.get(b'.'), CategoryCode::Other);
-        assert_eq!(table.get(b'!'), CategoryCode::Other);
+        assert_eq!(table.get(MaybeChar::from_char('0')), CategoryCode::Other);
+        assert_eq!(table.get(MaybeChar::from_char('9')), CategoryCode::Other);
+        assert_eq!(table.get(MaybeChar::from_char('.')), CategoryCode::Other);
+        assert_eq!(table.get(MaybeChar::from_char('!')), CategoryCode::Other);
     }
 
     #[test]
@@ -152,54 +156,54 @@ mod tests {
         let mut table = CategoryCodeTable::new();
 
         // Change a character's category code
-        assert_eq!(table.get(b'@'), CategoryCode::Other);
-        table.set(b'@', CategoryCode::Letter);
-        assert_eq!(table.get(b'@'), CategoryCode::Letter);
+        assert_eq!(table.get(MaybeChar::from_char('@')), CategoryCode::Other);
+        table.set(MaybeChar::from_char('@'), CategoryCode::Letter);
+        assert_eq!(table.get(MaybeChar::from_char('@')), CategoryCode::Letter);
     }
 
     #[test]
     fn test_is_letter() {
         let table = CategoryCodeTable::new();
 
-        assert!(table.is_letter(b'a'));
-        assert!(table.is_letter(b'z'));
-        assert!(table.is_letter(b'A'));
-        assert!(table.is_letter(b'Z'));
-        assert!(!table.is_letter(b'0'));
-        assert!(!table.is_letter(b' '));
-        assert!(!table.is_letter(b'\\'));
+        assert!(table.is_letter(MaybeChar::from_char('a')));
+        assert!(table.is_letter(MaybeChar::from_char('z')));
+        assert!(table.is_letter(MaybeChar::from_char('A')));
+        assert!(table.is_letter(MaybeChar::from_char('Z')));
+        assert!(!table.is_letter(MaybeChar::from_char('0')));
+        assert!(!table.is_letter(MaybeChar::from_char(' ')));
+        assert!(!table.is_letter(MaybeChar::from_char('\\')));
     }
 
     #[test]
     fn test_is_space() {
         let table = CategoryCodeTable::new();
 
-        assert!(table.is_space(b' '));
-        assert!(table.is_space(b'\t'));
-        assert!(!table.is_space(b'a'));
-        assert!(!table.is_space(b'\n'));
-        assert!(!table.is_space(b'\0'));
+        assert!(table.is_space(MaybeChar::from_char(' ')));
+        assert!(table.is_space(MaybeChar::from_char('\t')));
+        assert!(!table.is_space(MaybeChar::from_char('a')));
+        assert!(!table.is_space(MaybeChar::from_char('\n')));
+        assert!(!table.is_space(MaybeChar::from_char('\0')));
     }
 
     #[test]
     fn test_is_space_or_ignored() {
         let table = CategoryCodeTable::new();
 
-        assert!(table.is_space_or_ignored(b' '));
-        assert!(table.is_space_or_ignored(b'\t'));
-        assert!(table.is_space_or_ignored(b'\0'));
-        assert!(table.is_space_or_ignored(127)); // DEL
-        assert!(!table.is_space_or_ignored(b'a'));
-        assert!(!table.is_space_or_ignored(b'\n'));
+        assert!(table.is_space_or_ignored(MaybeChar::from_char(' ')));
+        assert!(table.is_space_or_ignored(MaybeChar::from_char('\t')));
+        assert!(table.is_space_or_ignored(MaybeChar::from_char('\0')));
+        assert!(table.is_space_or_ignored(MaybeChar::from_char('\u{7f}'))); // DEL
+        assert!(!table.is_space_or_ignored(MaybeChar::from_char('a')));
+        assert!(!table.is_space_or_ignored(MaybeChar::from_char('\n')));
     }
 
     #[test]
     fn test_is_escape() {
         let table = CategoryCodeTable::new();
 
-        assert!(table.is_escape(b'\\'));
-        assert!(!table.is_escape(b'/'));
-        assert!(!table.is_escape(b'a'));
+        assert!(table.is_escape(MaybeChar::from_char('\\')));
+        assert!(!table.is_escape(MaybeChar::from_char('/')));
+        assert!(!table.is_escape(MaybeChar::from_char('a')));
     }
 
     #[test]
@@ -208,8 +212,8 @@ mod tests {
         let table2 = CategoryCodeTable::default();
 
         // Both should have the same behavior
-        assert_eq!(table1.get(b'\\'), table2.get(b'\\'));
-        assert_eq!(table1.get(b'a'), table2.get(b'a'));
-        assert_eq!(table1.get(b' '), table2.get(b' '));
+        assert_eq!(table1.get(MaybeChar::from_char('\\')), table2.get(MaybeChar::from_char('\\')));
+        assert_eq!(table1.get(MaybeChar::from_char('a')), table2.get(MaybeChar::from_char('a')));
+        assert_eq!(table1.get(MaybeChar::from_char(' ')), table2.get(MaybeChar::from_char(' ')));
     }
 }
