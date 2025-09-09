@@ -1,5 +1,5 @@
 use std::num::NonZeroU8;
-use retex_base::{SourceLocation, MaybeChar};
+use retex_base::{SourceLocation, MaybeChar, MemoryBuffer};
 use crate::token::{Token, TokenKind, TokenFlags, TokenData};
 use crate::category_code::{CategoryCode, CategoryCodeTable};
 use crate::command_identifier::CommandIdentifierTable;
@@ -43,6 +43,10 @@ where
             skip_spaces: true,
             command_identifier_table,
         }
+    }
+
+    pub fn from_memory_buffer(buffer: &'source MemoryBuffer, command_identifier_table: &'idtable CommandIdentifierTable<'idtable>) -> Self {
+        Self::from_bytes(buffer.data(), command_identifier_table)
     }
 
     pub fn set_category_code(&mut self, maybe_char: MaybeChar, category_code: CategoryCode) {

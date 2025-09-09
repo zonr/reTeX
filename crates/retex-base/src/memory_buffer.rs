@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct MemoryBuffer {
     data: Arc<Vec<u8>>,
     buffer_name: String,
